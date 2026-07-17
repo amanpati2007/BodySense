@@ -1,0 +1,5 @@
+scikit-learn
+joblib
+pandas
+numpy
+# FastAPI and uvicorn are only needed for the Backend, not for training scripts

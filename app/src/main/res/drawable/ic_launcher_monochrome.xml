@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Monochrome icon for Android 13+ themed icons.
+    Uses a single white path — the system tints it per the user's wallpaper color.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Heart -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+            M54,72
+            C54,72 34,58 34,46
+            C34,39.373 39.373,34 46,34
+            C49.314,34 52.314,35.314 54.5,37.5
+            C56.686,35.314 59.686,34 63,34
+            C69.627,34 75,39.373 75,46
+            C75,58 54,72 54,72 Z
+        " />
+
+    <!-- ECG pulse line -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="
+            M20,74
+            L34,74
+            L38,66
+            L42,82
+            L47,60
+            L52,80
+            L56,74
+            L88,74
+        " />
+</vector>

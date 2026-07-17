@@ -1,0 +1,8 @@
+{
+  "name": "BodySense",
+  "description": "Production-Ready BodySense Android + FastAPI App",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

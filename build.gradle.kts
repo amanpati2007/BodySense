@@ -1,0 +1,10 @@
+// Top-level build file. Configuration options common to all sub-projects/modules.
+// Individual module configuration is in app/build.gradle.kts.
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.google.devtools.ksp) apply false
+    alias(libs.plugins.roborazzi) apply false
+    alias(libs.plugins.secrets) apply false
+    alias(libs.plugins.google.services) apply false
+}
