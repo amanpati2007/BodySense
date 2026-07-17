@@ -31,6 +31,11 @@ import com.bodysense.DiseaseConfigs
 import com.bodysense.HealthState
 import com.bodysense.MainViewModel
 import kotlinx.coroutines.delay
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import com.bodysense.ui.animations.bounceClick
+import com.bodysense.ui.animations.Motion
 
 // ─── Disease card visual metadata ─────────────────────────────────────────────
 private data class DiseaseVisual(
@@ -58,23 +63,40 @@ fun DashboardScreen(
     onNavigateToHistory: () -> Unit = {}
 ) {
     val healthState by viewModel.healthState.collectAsState()
+    
+    var showHeader by remember { mutableStateOf(false) }
+    var showStatus by remember { mutableStateOf(false) }
+    var showGrid by remember { mutableStateOf(false) }
+    
+    LaunchedEffect(Unit) {
+        showHeader = true
+        delay(150)
+        showStatus = true
+        delay(150)
+        showGrid = true
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            "BodySense",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            "Select a health assessment",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    AnimatedVisibility(
+                        visible = showHeader,
+                        enter = fadeIn(Motion.premiumTween) + slideInVertically(Motion.premiumIntOffsetTween) { 20 }
+                    ) {
+                        Column {
+                            Text(
+                                "BodySense",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "Select a health assessment",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -92,7 +114,7 @@ fun DashboardScreen(
                         modifier = Modifier
                             .size(36.dp)
                             .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                            .clickable { onNavigateToHistory() },
+                            .bounceClick { onNavigateToHistory() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -111,50 +133,63 @@ fun DashboardScreen(
         Column(modifier = Modifier.padding(padding)) {
 
             // ── Backend Status Card ────────────────────────────────────────────
-            BackendStatusCard(
-                healthState = healthState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            )
-
-            // ── Summary row ────────────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            AnimatedVisibility(
+                visible = showStatus,
+                enter = fadeIn(Motion.premiumTween) + slideInVertically(Motion.premiumIntOffsetTween) { 40 }
             ) {
-                SummaryChip(
-                    modifier = Modifier.weight(1f),
-                    label = "${diseaseVisuals.size} Screenings",
-                    icon = Icons.Default.CheckCircle,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                SummaryChip(
-                    modifier = Modifier.weight(1f),
-                    label = "AI-Powered",
-                    icon = Icons.Default.Star,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
+                Column {
+                    BackendStatusCard(
+                        healthState = healthState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                    )
+
+                    // ── Summary row ────────────────────────────────────────────────
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        SummaryChip(
+                            modifier = Modifier.weight(1f),
+                            label = "${diseaseVisuals.size} Screenings",
+                            icon = Icons.Default.CheckCircle,
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                        SummaryChip(
+                            modifier = Modifier.weight(1f),
+                            label = "AI-Powered",
+                            icon = Icons.Default.Star,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                    }
+                }
             }
 
             // ── Disease Grid ───────────────────────────────────────────────
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+            AnimatedVisibility(
+                visible = showGrid,
+                enter = fadeIn(Motion.premiumTween) + slideInVertically(Motion.premiumIntOffsetTween) { 80 },
                 modifier = Modifier.fillMaxSize()
             ) {
-                itemsIndexed(diseaseVisuals, key = { _, visual -> visual.config.id }) { index, visual ->
-                    DiseaseCard(
-                        visual = visual,
-                        animationDelay = index * 60,
-                        onNavigate = onNavigateToAssessment
-                    )
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    itemsIndexed(diseaseVisuals, key = { _, visual -> visual.config.id }) { index, visual ->
+                        DiseaseCard(
+                            visual = visual,
+                            animationDelay = index * 60,
+                            onNavigate = onNavigateToAssessment
+                        )
+                    }
                 }
             }
         }
@@ -298,7 +333,7 @@ private fun DiseaseCard(
             .fillMaxWidth()
             .aspectRatio(0.85f)
             .alpha(animatedAlpha)
-            .clickable { onNavigate(visual.config.id) },
+            .bounceClick { onNavigate(visual.config.id) },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 8.dp),

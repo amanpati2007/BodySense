@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import psutil
 import pandas as pd
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
@@ -163,7 +164,7 @@ def root():
 
 @app.get("/health", tags=["Status"])
 def health():
-    """Returns load status for all disease models plus server uptime and prediction count."""
+    """Returns load status for all disease models plus server uptime, prediction count, and telemetry."""
     global _startup_time, _predictions_served
     model_status = {
         disease: ("loaded" if info["loaded"] else "heuristic_only")
@@ -171,12 +172,38 @@ def health():
     }
     all_loaded = all(v["loaded"] for v in DISEASE_MODELS.values())
     uptime = round(time.time() - _startup_time, 1) if _startup_time > 0 else 0
+    
+    # Telemetry
+    try:
+        process = psutil.Process(os.getpid())
+        system_cpu = psutil.cpu_percent(interval=None)
+        system_ram = psutil.virtual_memory().percent
+        disk_usage = psutil.disk_usage('/').percent
+        
+        process_cpu = process.cpu_percent(interval=None)
+        process_ram = process.memory_info().rss / (1024 * 1024) # MB
+        threads = process.num_threads()
+        
+        telemetry = {
+            "system_cpu_percent": system_cpu,
+            "system_ram_percent": system_ram,
+            "disk_usage_percent": disk_usage,
+            "process_pid": process.pid,
+            "process_cpu_percent": process_cpu,
+            "process_ram_mb": round(process_ram, 1),
+            "thread_count": threads
+        }
+    except Exception as e:
+        log.warning(f"Failed to fetch telemetry: {e}")
+        telemetry = {}
+
     return {
         "status": "healthy" if all_loaded else "partial",
         "models": model_status,
         "uptime_seconds": uptime,
         "predictions_served": _predictions_served,
         "version": "1.9.0",
+        "telemetry": telemetry
     }
 
 

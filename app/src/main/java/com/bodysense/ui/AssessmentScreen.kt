@@ -1,8 +1,9 @@
 package com.bodysense.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -37,6 +38,9 @@ import com.bodysense.FieldType
 import com.bodysense.HealthState
 import com.bodysense.MainViewModel
 import com.bodysense.UiState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import com.bodysense.ui.animations.bounceClick
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,9 +64,30 @@ fun AssessmentScreen(
     val primary = MaterialTheme.colorScheme.primary
 
     val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
 
     // Reset prediction when disease changes
     LaunchedEffect(diseaseId) { viewModel.reset() }
+
+    // Auto-scroll to result when prediction completes
+    LaunchedEffect(uiState) {
+        if (uiState is UiState.Success || uiState is UiState.Error) {
+            coroutineScope.launch {
+                // Wait for the expand animation to partially finish so layout size updates
+                delay(150)
+                scrollState.animateScrollTo(
+                    scrollState.maxValue,
+                    animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)
+                )
+                // Ensure it's fully at the bottom after animation completes
+                delay(300)
+                scrollState.animateScrollTo(
+                    scrollState.maxValue,
+                    animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+                )
+            }
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -77,10 +102,10 @@ fun AssessmentScreen(
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val (dotColor, statusLabel) = when (healthState) {
-                                is HealthState.Healthy -> Color(0xFF4CAF50) to "Connected"
+                                is HealthState.Healthy      -> Color(0xFF4CAF50) to "Connected"
                                 is HealthState.PartiallyOnline -> Color(0xFFFF9800) to "Partial"
-                                is HealthState.Offline -> Color(0xFFEF5350) to "Offline"
-                                is HealthState.Checking -> Color(0xFFFFB300) to "Checking"
+                                is HealthState.Offline      -> Color(0xFFEF5350) to "Offline"
+                                is HealthState.Checking     -> Color(0xFFFFB300) to "Checking"
                             }
                             Box(
                                 modifier = Modifier
@@ -155,39 +180,6 @@ fun AssessmentScreen(
                 }
             }
 
-            // ── Error State ───────────────────────────────────────────────────
-            AnimatedVisibility(visible = uiState is UiState.Error) {
-                if (uiState is UiState.Error) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Warning,
-                                null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = (uiState as UiState.Error).message,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ── Success Result Card ────────────────────────────────────────────
-            AnimatedVisibility(visible = uiState is UiState.Success) {
-                if (uiState is UiState.Success) {
-                    val result = uiState as UiState.Success
-                    RiskResultCard(result = result, config = config, accentColor = accentColor)
-                }
-            }
-
             // ── Input Fields ──────────────────────────────────────────────────
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -233,7 +225,15 @@ fun AssessmentScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .testTag("predict_button"),
+                    .testTag("predict_button")
+                    .bounceClick {
+                        val values = config.fields.associate { field ->
+                            field.key to (fieldValues[field.key]?.value?.toFloatOrNull() ?: 0f)
+                        }
+                        if (allFilled && uiState !is UiState.Loading) {
+                            viewModel.predict(diseaseId, values)
+                        }
+                    },
                 enabled = allFilled && uiState !is UiState.Loading,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -249,6 +249,48 @@ fun AssessmentScreen(
                     Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Run Assessment", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+
+            // ── Error State (below button) ─────────────────────────────────────
+            AnimatedVisibility(
+                visible = uiState is UiState.Error,
+                enter = fadeIn(tween(300)) + expandVertically(tween(300))
+            ) {
+                if (uiState is UiState.Error) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Warning,
+                                null,
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = (uiState as UiState.Error).message,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Success Result Card (below button — only shown after prediction) ──
+            AnimatedVisibility(
+                visible = uiState is UiState.Success,
+                enter = fadeIn(tween(400)) + expandVertically(
+                    animationSpec = tween(450, easing = FastOutSlowInEasing),
+                    expandFrom = Alignment.Top
+                )
+            ) {
+                if (uiState is UiState.Success) {
+                    val result = uiState as UiState.Success
+                    RiskResultCard(result = result, config = config, accentColor = accentColor)
                 }
             }
 
@@ -296,6 +338,12 @@ private fun RiskResultCard(result: UiState.Success, config: DiseaseConfig, accen
         else              -> Color(0xFFD32F2F)
     }
 
+    val animatedRisk by animateFloatAsState(
+        targetValue = result.risk,
+        animationSpec = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+        label = "risk_animation"
+    )
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -315,7 +363,7 @@ private fun RiskResultCard(result: UiState.Success, config: DiseaseConfig, accen
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "${String.format("%.1f", result.risk)}%",
+                text = "${String.format("%.1f", animatedRisk)}%",
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
                 color = riskColor,
@@ -328,7 +376,7 @@ private fun RiskResultCard(result: UiState.Success, config: DiseaseConfig, accen
             )
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = { result.risk / 100f },
+                progress = { animatedRisk / 100f },
                 modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
                 color = riskColor,
                 trackColor = riskColor.copy(alpha = 0.2f),
@@ -401,6 +449,7 @@ private fun AssessmentFieldInput(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChoiceFieldInput(
     field: AssessmentField,
@@ -415,9 +464,12 @@ private fun ChoiceFieldInput(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 6.dp)
         )
-        Row(
+        // FlowRow wraps chips to the next line when they overflow,
+        // eliminating the large gap caused by a single Row with many long labels.
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             field.choices.forEach { (label, numVal) ->
                 val isSelected = selected == numVal.toString()

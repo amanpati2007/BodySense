@@ -15,6 +15,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.bodysense.ui.*
+import com.bodysense.ui.animations.Motion
 import com.bodysense.ui.theme.BodySenseTheme
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -40,7 +41,14 @@ private fun BodySenseNavHost() {
     // Single shared ViewModel instance for the whole nav graph
     val viewModel: MainViewModel = viewModel()
 
-    NavHost(navController = navController, startDestination = "loading") {
+    NavHost(
+        navController = navController, 
+        startDestination = "loading",
+        enterTransition = { Motion.slideInLeft },
+        exitTransition = { Motion.slideOutLeft },
+        popEnterTransition = { Motion.slideInRight },
+        popExitTransition = { Motion.slideOutRight }
+    ) {
 
         composable("loading") {
             LoadingScreen(

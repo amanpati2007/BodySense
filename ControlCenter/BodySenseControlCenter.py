@@ -100,6 +100,8 @@ class BodySenseControlCenter(ctk.CTk):
         self.poll_active = True
         self.start_time: float | None = None
         self._log_lines = 0
+        self.history_cpu = [0] * 60
+        self.history_ram = [0] * 60
 
         self._build_ui()
         self._start_polling()
@@ -128,10 +130,12 @@ class BodySenseControlCenter(ctk.CTk):
         self.tabs.pack(fill="both", expand=True, padx=16, pady=(8, 16))
 
         self.tabs.add("Dashboard")
+        self.tabs.add("Performance")
         self.tabs.add("Logs")
         self.tabs.add("Settings")
 
         self._build_dashboard(self.tabs.tab("Dashboard"))
+        self._build_performance(self.tabs.tab("Performance"))
         self._build_logs(self.tabs.tab("Logs"))
         self._build_settings(self.tabs.tab("Settings"))
 
@@ -294,6 +298,91 @@ class BodySenseControlCenter(ctk.CTk):
 
             self._model_bars[disease] = (bar, status_lbl)
 
+    def _build_performance(self, parent):
+        parent.configure(fg_color=BG_DARK)
+        
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_columnconfigure(1, weight=1)
+        
+        left = ctk.CTkFrame(parent, fg_color="transparent")
+        left.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
+        
+        sys_card = ctk.CTkFrame(left, fg_color=BG_CARD, corner_radius=16)
+        sys_card.pack(fill="x", pady=8)
+        ctk.CTkLabel(sys_card, text="System Telemetry", font=ctk.CTkFont(size=12, weight="bold"), text_color=TEXT_DIM).pack(anchor="w", padx=16, pady=(12,4))
+        
+        self.perf_labels = {}
+        for key, lbl in [
+            ("sys_cpu", "System CPU"), ("sys_ram", "System RAM"), ("disk", "Disk Usage")
+        ]:
+            row = ctk.CTkFrame(sys_card, fg_color="transparent")
+            row.pack(fill="x", padx=16, pady=2)
+            ctk.CTkLabel(row, text=lbl, font=ctk.CTkFont(size=11), text_color=TEXT_DIM, width=120, anchor="w").pack(side="left")
+            val = ctk.CTkLabel(row, text="—", font=ctk.CTkFont(size=11, weight="bold"), text_color=TEXT_MAIN, anchor="w")
+            val.pack(side="left")
+            self.perf_labels[key] = val
+            
+        proc_card = ctk.CTkFrame(left, fg_color=BG_CARD, corner_radius=16)
+        proc_card.pack(fill="x", pady=8)
+        ctk.CTkLabel(proc_card, text="Backend Process", font=ctk.CTkFont(size=12, weight="bold"), text_color=TEXT_DIM).pack(anchor="w", padx=16, pady=(12,4))
+        
+        for key, lbl in [
+            ("pid", "Python PID"), ("proc_cpu", "Backend CPU"), ("proc_ram", "Backend RAM"), ("threads", "Thread Count")
+        ]:
+            row = ctk.CTkFrame(proc_card, fg_color="transparent")
+            row.pack(fill="x", padx=16, pady=2)
+            ctk.CTkLabel(row, text=lbl, font=ctk.CTkFont(size=11), text_color=TEXT_DIM, width=120, anchor="w").pack(side="left")
+            val = ctk.CTkLabel(row, text="—", font=ctk.CTkFont(size=11, weight="bold"), text_color=TEXT_MAIN, anchor="w")
+            val.pack(side="left")
+            self.perf_labels[key] = val
+            
+        mod_card = ctk.CTkFrame(left, fg_color=BG_CARD, corner_radius=16)
+        mod_card.pack(fill="x", pady=8)
+        ctk.CTkLabel(mod_card, text="Model Memory Tracking", font=ctk.CTkFont(size=12, weight="bold"), text_color=TEXT_DIM).pack(anchor="w", padx=16, pady=(12,4))
+        ctk.CTkLabel(mod_card, text="⚠️ Note: Per-model memory cannot be tracked cleanly due to scikit-learn C-extensions. Aggregate process RAM is shown above.", font=ctk.CTkFont(size=11), text_color=WARNING, wraplength=400, justify="left").pack(anchor="w", padx=16, pady=(0,12))
+
+        right = ctk.CTkFrame(parent, fg_color="transparent")
+        right.grid(row=0, column=1, sticky="nsew", padx=8, pady=8)
+        
+        chart_card = ctk.CTkFrame(right, fg_color=BG_CARD, corner_radius=16)
+        chart_card.pack(fill="both", expand=True, pady=8)
+        ctk.CTkLabel(chart_card, text="Performance History (Last 60s)", font=ctk.CTkFont(size=12, weight="bold"), text_color=TEXT_DIM).pack(anchor="w", padx=16, pady=(12,4))
+        
+        self.canvas = ctk.CTkCanvas(chart_card, bg=BG_DARK, highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True, padx=16, pady=16)
+
+    def _draw_chart(self):
+        if not hasattr(self, 'canvas') or not self.canvas.winfo_exists(): return
+        self.canvas.delete("all")
+        w = self.canvas.winfo_width()
+        h = self.canvas.winfo_height()
+        if w < 10 or h < 10: return
+        
+        pad_x, pad_y = 30, 20
+        chart_w, chart_h = w - pad_x * 2, h - pad_y * 2
+        
+        for i in range(5):
+            y = pad_y + chart_h * (i / 4.0)
+            self.canvas.create_line(pad_x, y, w - pad_x, y, fill=BG_PANEL, dash=(2, 2))
+            self.canvas.create_text(pad_x - 5, y, text=f"{100 - i*25}%", fill=TEXT_DIM, anchor="e", font=("Arial", 8))
+            
+        def draw_line(data, color):
+            points = []
+            for i, val in enumerate(data):
+                x = pad_x + (i / max(1, len(data) - 1)) * chart_w
+                y = pad_y + chart_h * (1.0 - (min(100, max(0, val)) / 100.0))
+                points.extend([x, y])
+            if len(points) >= 4:
+                self.canvas.create_line(*points, fill=color, width=2, smooth=True)
+
+        draw_line(self.history_cpu, ACCENT)
+        draw_line(self.history_ram, "#8B5CF6")
+        
+        self.canvas.create_rectangle(pad_x, 5, pad_x + 10, 15, fill=ACCENT, outline="")
+        self.canvas.create_text(pad_x + 15, 10, text="Sys CPU", fill=TEXT_DIM, anchor="w", font=("Arial", 9))
+        self.canvas.create_rectangle(pad_x + 70, 5, pad_x + 80, 15, fill="#8B5CF6", outline="")
+        self.canvas.create_text(pad_x + 85, 10, text="Sys RAM", fill=TEXT_DIM, anchor="w", font=("Arial", 9))
+
     def _build_logs(self, parent):
         parent.configure(fg_color=BG_DARK)
 
@@ -396,6 +485,26 @@ class BodySenseControlCenter(ctk.CTk):
                 bar.set(0.3)
                 bar.configure(progress_color=WARNING)
                 lbl.configure(text="⚠ Heuristic", text_color=WARNING)
+
+        telemetry = data.get("telemetry", {})
+        if hasattr(self, "perf_labels") and telemetry:
+            cpu = telemetry.get("system_cpu_percent", 0)
+            ram = telemetry.get("system_ram_percent", 0)
+            
+            self.history_cpu.append(cpu)
+            self.history_ram.append(ram)
+            if len(self.history_cpu) > 60: self.history_cpu.pop(0)
+            if len(self.history_ram) > 60: self.history_ram.pop(0)
+            
+            self.perf_labels["sys_cpu"].configure(text=f"{cpu}%")
+            self.perf_labels["sys_ram"].configure(text=f"{ram}%")
+            self.perf_labels["disk"].configure(text=f"{telemetry.get('disk_usage_percent', 0)}%")
+            self.perf_labels["pid"].configure(text=str(telemetry.get("process_pid", "—")))
+            self.perf_labels["proc_cpu"].configure(text=f"{telemetry.get('process_cpu_percent', 0)}%")
+            self.perf_labels["proc_ram"].configure(text=f"{telemetry.get('process_ram_mb', 0)} MB")
+            self.perf_labels["threads"].configure(text=str(telemetry.get("thread_count", 0)))
+            
+            self._draw_chart()
 
     @staticmethod
     def _format_uptime(seconds: float) -> str:

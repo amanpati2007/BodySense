@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.bodysense.MainViewModel
 import com.bodysense.data.HistoryEntity
+import com.bodysense.ui.animations.bounceClick
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -105,7 +106,7 @@ fun HistoryCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .bounceClick(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
